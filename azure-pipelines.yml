@@ -1,0 +1,82 @@
+# trigger: none
+trigger:
+  batch: true
+  branches:
+    include:
+      - main
+      - dev
+
+pr:
+  - main
+
+# pool: $(agentPoolName)
+
+pool:
+  vmImage: "windows-latest"
+
+variables:
+  buildPlatform: "Any CPU"
+  buildConfiguration: "Release"
+  solution: "**/RoundTheCode.AzureTestProject.sln"
+  project: "**/RoundTheCode.AzureTestProject.csproj"
+
+stages:
+  - stage: "Build"
+    displayName: "Build the application"
+    jobs:
+      - job: Build
+        displayName: "Build job"
+        steps:
+          - task: NuGetToolInstaller@1
+            name: "NuGetToolInstaller"
+            displayName: "NuGet tool installer"
+
+          - task: NuGetCommand@2
+            name: "NuGetRestore"
+            displayName: "NuGet restore packages"
+            inputs:
+              command: "restore"
+              restoreSolution: "$(solution)"
+              feedsToUse: "select"
+
+          - task: DotNetCoreCLI@2
+            displayName: "Run tests & Code coverage"
+            inputs:
+              command: test
+              projects: "$(solution)"
+              arguments: '--configuration $(BuildConfiguration) --collect "Code Coverage"'
+          # - task: PublishCodeCoverageResults@2
+          #   inputs:
+          #     summaryFileLocation: '$(Agent.TempDirectory)/**/.coverage'
+          - task: DotNetCoreCLI@2
+            name: "Publish"
+            displayName: "Publish"
+            inputs:
+              command: "publish"
+              publishWebProjects: false
+              projects: "$(project)"
+              arguments: "--configuration $(BuildConfiguration) --output $(Build.ArtifactStagingDirectory)"
+              zipAfterPublish: false
+          - task: BuildQualityChecks@9
+            inputs:
+              checkCoverage: true
+              coverageFailOption: "fixed"
+              coverageType: "lines"
+              coverageThreshold: "20"
+  # - stage: DeployWebsite
+  #   displayName: "Deploy website"
+
+  #   jobs:
+  #     - deployment: DeployWebsite
+  #       displayName: "Deploy website"
+  #       environment: "Production.DAVE"
+  #       strategy:
+  #         runOnce:
+  #           deploy:
+  #             steps:
+  #               - checkout: none
+
+  #               - download: "buildPipeline"
+  #                 name: "DownloadBuildArtifacts"
+  #                 displayName: "Download build artifacts"
+  #                 artifact: "AzureTestProject"
